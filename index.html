@@ -31,25 +31,32 @@
         </div>
       </section>
 
-      <!-- Center: Ayah + input -->
+      <!-- Center: Strict Cloze Deletion -->
       <section class="col-span-6 p-5 bg-gray-850 rounded">
-        <div class="mb-4">
-          <div class="text-xs text-gray-400">السورة / الآية</div>
-          <div id="surah-title" class="text-lg font-semibold"></div>
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-gray-400">السورة / الآية</div>
+            <div id="surah-title" class="text-lg font-semibold"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-xs text-gray-400">التشكيل: </label>
+            <select id="tashkeel-toggle" class="bg-gray-800 text-sm p-1 rounded">
+              <option value="lenient">Lenient (ignore tashkeel)</option>
+              <option value="strict">Strict (match tashkeel)</option>
+            </select>
+            <label class="text-xs text-gray-400">تسامح (%)</label>
+            <input id="tolerance" type="range" min="0" max="100" value="20" class="h-2">
+            <input id="initial-words" type="number" min="0" max="20" value="2" class="w-14 bg-gray-800 text-sm p-1 rounded" title="Initial revealed words">
+          </div>
         </div>
 
         <div class="quran-window p-4 bg-black/50 rounded mb-4">
-          <div id="ayah-display" class="quran-text text-right text-2xl leading-tight" ></div>
+          <div id="cloze-container" class="quran-text text-right text-2xl leading-tight flex flex-wrap items-center gap-2"></div>
         </div>
 
         <div class="p-3 bg-gray-900 rounded">
-          <label class="block text-xs text-gray-400 mb-2">اكتب الآية هنا — التحقق آنيًا</label>
-          <div class="relative">
-            <textarea id="typing-area" rows="3" placeholder="ابدأ بالكتابة..." class="w-full resize-none bg-transparent outline-none text-lg p-2" ></textarea>
-            <div id="inline-feedback" class="absolute inset-0 pointer-events-none p-2"></div>
-          </div>
           <div id="status-row" class="mt-2 flex items-center justify-between text-xs text-gray-400">
-            <div id="live-feedback">انتظار الإدخال...</div>
+            <div id="live-feedback">جاهز — ابدأ الإجابة</div>
             <div id="timer">0s</div>
           </div>
         </div>
@@ -70,6 +77,7 @@
     </main>
   </div>
 
+  <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="app.js" type="module"></script>
 </body>
 </html>
