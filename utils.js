@@ -2,6 +2,22 @@
 const MONTHS_HIJRI = ['محرم', 'صفر', 'ربيع الأول', 'ربيع الثاني', 'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'];
 const DAYS_HIJRI = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
+const ARABIC_DIACRITICS = /[\u0610-\u061A\u064B-\u065F\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u0670]/g;
+function stripDiacritics(s){ return (s||'').replace(ARABIC_DIACRITICS,'').replace(/\s+/g,' ').trim(); }
+function tokenizeArabic(s){ return (s||'').trim().split(/\s+/).filter(Boolean); }
+
+function levenshtein(a,b){
+  a = a||''; b = b||'';
+  if(a===b) return 0;
+  const m=a.length,n=b.length; const dp = Array.from({length:m+1},()=>Array(n+1).fill(0));
+  for(let i=0;i<=m;i++) dp[i][0]=i; for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){
+    const cost = a[i-1]===b[j-1]?0:1;
+    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+  }
+  return dp[m][n];
+}
+
 // Convert Gregorian to Hijri (simplified but accurate)
 function toHijri(date) {
   const jd = Math.floor((date.getTime() / 86400000) + 1948439.5);
