@@ -149,7 +149,7 @@ const UI = {
     const el = this.elements.surahListEl; el.innerHTML = '';
     for(const s of this.surahList){
       const li = document.createElement('li');
-      const btn = document.createElement('button'); btn.className='glass-button w-full text-right p-2 text-sm rounded-lg';
+      const btn = document.createElement('button'); btn.className='surah-item w-full text-right';
       btn.textContent = `${s.surahName} (${s.count})`;
       btn.onclick = ()=>{ this.active.surahIndex = s.surahIndex; this.active.ayaIndex = 1; this.active.revealed=0; this.renderActive(); this.renderSurahStats(); };
       li.appendChild(btn); el.appendChild(li);
