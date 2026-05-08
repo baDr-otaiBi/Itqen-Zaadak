@@ -2,14 +2,148 @@
   --bg:#0b0b0d;
   --panel:#0f1113;
   --muted:#9aa0a6;
-  --accent-error:#ff3b30; /* Glitchy Red */
-  --accent-success:#3ddc84; /* Cold Green */
-  --accent-warn:#ff9f1c; /* Tashkeel/typo */
+  --accent-error:#ff3b30;
+  --accent-success:#3ddc84;
+  --accent-warn:#ff9f1c;
 }
 
-/* Font families */
+body{
+  background: linear-gradient(135deg, #0b0b0d 0%, #0f1113 50%, #0a0a0c 100%);
+  overflow-x: hidden;
+}
+
+.glass-bg{ background: linear-gradient(135deg, #0b0b0d 0%, #0f1113 50%, #0a0a0c 100%); }
+
+.glass-panel{
+  background: rgba(15, 17, 19, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before{
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 35%, transparent 65%, rgba(255,255,255,0.03));
+  pointer-events: none;
+}
+
+.glass-panel > *{
+  position: relative;
+  z-index: 1;
+}
+
+.glass-inner{
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-input{
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.glass-input:focus{ outline: none; border-color: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 3px rgba(61,220,132,0.08); }
+
+.glass-button{
+  background: linear-gradient(135deg, rgba(61, 220, 132, 0.2), rgba(61, 220, 132, 0.1));
+  border: 1px solid rgba(61, 220, 132, 0.3);
+  color: #3ddc84;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.glass-button:hover{
+  background: linear-gradient(135deg, rgba(61, 220, 132, 0.3), rgba(61, 220, 132, 0.2));
+  border-color: rgba(61, 220, 132, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(61, 220, 132, 0.15);
+}
+
+.glass-button:active{ transform: translateY(0); }
+
+.glass-frame{
+  border: 1px solid rgba(255,255,255,0.09);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.soft-rim{
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.05),
+    0 24px 80px rgba(0, 0, 0, 0.3);
+}
+
+.feedback-pill{
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  transition: all 0.25s ease;
+}
+
+.feedback-pill.is-neutral{ color: #c8ced6; }
+.feedback-pill.is-success{ color: #aef2c7; border-color: rgba(61,220,132,0.28); background: rgba(61,220,132,0.08); box-shadow: 0 0 0 3px rgba(61,220,132,0.05); }
+.feedback-pill.is-error{ color: #ffb2ac; border-color: rgba(255,59,48,0.28); background: rgba(255,59,48,0.08); box-shadow: 0 0 0 3px rgba(255,59,48,0.05); }
+.feedback-pill.is-warning{ color: #ffdca0; border-color: rgba(255,159,28,0.28); background: rgba(255,159,28,0.08); box-shadow: 0 0 0 3px rgba(255,159,28,0.05); }
+
+.stat-card{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 1rem;
+  padding: 0.8rem;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.stat-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(61,220,132,0.18);
+  background: rgba(255,255,255,0.06);
+}
+
+.stat-bar{
+  height: 0.55rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.28);
+}
+
+.stat-bar > span{
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3ddc84 0%, #ff9f1c 50%, #ff3b30 100%);
+}
+
+.input-error{ border-color: rgba(255,59,48,0.45) !important; box-shadow: 0 0 0 3px rgba(255,59,48,0.08); }
+.input-success{ border-color: rgba(61,220,132,0.45) !important; box-shadow: 0 0 0 3px rgba(61,220,132,0.08); }
+.input-warning{ border-color: rgba(255,159,28,0.45) !important; box-shadow: 0 0 0 3px rgba(255,159,28,0.08); }
+
+#wrong-modal{
+  border: 1px solid rgba(255,59,48,0.22);
+  box-shadow: 0 16px 48px rgba(255,59,48,0.08);
+}
+
+#correct-answer{
+  border-radius: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
 @font-face{font-family:Alyamama;src:local('Alyamama');}
-body{background:var(--bg);}
 .font-alyamama{font-family: Alyamama, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
 .quran-text{font-family: 'Amiri', serif; direction: rtl;}
 
@@ -46,4 +180,8 @@ textarea:focus{outline:2px solid rgba(61,220,132,0.12)}
 /* Type scaling */
 @media (max-width:900px){
   .quran-text{font-size:1.25rem}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

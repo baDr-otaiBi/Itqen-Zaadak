@@ -1,11 +1,9 @@
-// Itqin Zaadak — Cloze engine with IndexedDB ingestion and strict tashkeel toggle
-// Architectural goals: XML -> IndexedDB import (once), cloze word-by-word, SM-2 stored in DB, zero-RAM bulk loads
+// Itqin Zaadak — Advanced Cloze engine with sidebar error stats, Hijri, Arabic UI, wrong answer modal
 
 const DB_NAME = 'itqin_zaadak_db';
 const DB_VERSION = 1;
 const XML_PATH = '/quran-simple.xml';
 
-// Utilities
 function nowSeconds(){return Math.floor(Date.now()/1000)}
 const ARABIC_DIACRITICS = /[\u0610-\u061A\u064B-\u065F\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u0670]/g;
 function stripDiacritics(s){ return (s||'').replace(ARABIC_DIACRITICS,'').replace(/\s+/g,' ').trim(); }
@@ -23,7 +21,6 @@ function levenshtein(a,b){
   return dp[m][n];
 }
 
-// SM-2 minimal class (used to compute schedule and persisted)
 class SM2Item{
   constructor(id){ this.id=id; this.ef=2.5; this.interval=0; this.reps=0; this.next=0; this.history=[]; }
   applyReview(quality, responseTime, errorRate){
@@ -38,7 +35,7 @@ class SM2Item{
   }
 }
 
-// IndexedDB helpers
+// IndexedDB
 function openDB(){
   return new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -69,11 +66,9 @@ async function putProgress(db, progress){ return new Promise((res,rej)=>{ const 
 async function getProgress(db, id){ return new Promise((res,rej)=>{ const tx=db.transaction('progress').objectStore('progress').get(id); tx.onsuccess=()=>res(tx.result); tx.onerror=()=>rej(tx.error); }); }
 async function getProgressBySurah(db, surahIndex){ return new Promise((res,rej)=>{ const store=db.transaction('progress').objectStore('progress'); const idx = store.index('surah'); const req = idx.getAll(IDBKeyRange.only(surahIndex)); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); }); }
 
-// XML ingestion (DOMParser) — runs only once
 async function importXMLIfNeeded(db){
   const imported = await getMeta(db,'imported_v1');
   if(imported) return await getMeta(db,'surah_list');
-  // fetch XML
   const resp = await fetch(XML_PATH);
   if(!resp.ok) throw new Error('Failed to fetch XML');
   const text = await resp.text();
@@ -98,7 +93,7 @@ async function importXMLIfNeeded(db){
   return surahList;
 }
 
-// UI wiring — strict cloze engine
+// Main App
 const UI = {
   db: null,
   surahList: [],
@@ -108,16 +103,21 @@ const UI = {
   async init(){
     this.elements = {
       surahListEl: document.getElementById('surah-list'),
-      heatmapEl: document.getElementById('heatmap'),
+      surahStatsSummaryEl: document.getElementById('surah-stats-summary'),
+      surahStatsListEl: document.getElementById('surah-stats-list'),
       clozeContainer: document.getElementById('cloze-container'),
       surahTitle: document.getElementById('surah-title'),
       liveFeedback: document.getElementById('live-feedback'),
       timer: document.getElementById('timer'),
       tashkeelToggle: document.getElementById('tashkeel-toggle'),
       tolerance: document.getElementById('tolerance'),
+      toleranceDisplay: document.getElementById('tolerance-display'),
       initialWords: document.getElementById('initial-words'),
       progressEl: document.getElementById('progress'),
-      schedulesEl: document.getElementById('schedules')
+      schedulesEl: document.getElementById('schedules'),
+      wrongModal: document.getElementById('wrong-modal'),
+      correctAnswerEl: document.getElementById('correct-answer'),
+      continueBtn: document.getElementById('continue-btn')
     };
     this.db = await openDB();
     this.surahList = await importXMLIfNeeded(this.db);
@@ -125,13 +125,23 @@ const UI = {
     this.renderSurahList();
     this.loadActiveFromURL();
     setInterval(()=>this.updateTimer(),500);
-    // attach control listeners
-    this.elements.tolerance.addEventListener('input', ()=>{ this.elements.liveFeedback.textContent = `Tolerance: ${this.elements.tolerance.value}%`; });
+    this.elements.tolerance.addEventListener('input', (e)=>{ this.elements.toleranceDisplay.textContent = e.target.value; });
     this.elements.initialWords.addEventListener('change', ()=>{ this.active.revealed = Math.max(0, Math.min(this.words?this.words.length:0, Number(this.elements.initialWords.value))); this.spawnCloze(); });
+    this.elements.continueBtn.addEventListener('click', async ()=>{ 
+      this.elements.wrongModal.classList.add('hidden'); 
+      await this.onAyahComplete(); 
+    });
+    this.setFeedback('neutral', 'جاهز — ابدأ الإجابة');
+  },
+
+  setFeedback(state, text){
+    if(!this.elements.liveFeedback) return;
+    this.elements.liveFeedback.classList.remove('is-neutral','is-success','is-error','is-warning','feedback-pill');
+    this.elements.liveFeedback.classList.add('feedback-pill', `is-${state}`);
+    this.elements.liveFeedback.textContent = text;
   },
 
   loadActiveFromURL(){
-    // default: first surah and aya 1
     if(this.surahList.length){ this.active.surahIndex = this.surahList[0].surahIndex; this.active.ayaIndex = 1; this.active.revealed = 0; this.renderActive(); }
   },
 
@@ -139,9 +149,9 @@ const UI = {
     const el = this.elements.surahListEl; el.innerHTML = '';
     for(const s of this.surahList){
       const li = document.createElement('li');
-      const btn = document.createElement('button'); btn.className='text-sm w-full text-right p-2 rounded hover:bg-gray-700';
+      const btn = document.createElement('button'); btn.className='glass-button w-full text-right p-2 text-sm rounded-lg';
       btn.textContent = `${s.surahName} (${s.count})`;
-      btn.onclick = ()=>{ this.active.surahIndex = s.surahIndex; this.active.ayaIndex = 1; this.active.revealed=0; this.renderActive(); this.renderHeatmap(); };
+      btn.onclick = ()=>{ this.active.surahIndex = s.surahIndex; this.active.ayaIndex = 1; this.active.revealed=0; this.renderActive(); this.renderSurahStats(); };
       li.appendChild(btn); el.appendChild(li);
     }
   },
@@ -149,16 +159,16 @@ const UI = {
   async renderActive(){
     const surahMeta = this.surahList.find(s=>s.surahIndex===this.active.surahIndex);
     this.elements.surahTitle.textContent = `${surahMeta.surahName} — آية ${this.active.ayaIndex}`;
-    this.active.revealed = 0;
     const ayah = await getAyah(this.db, this.active.surahIndex, this.active.ayaIndex);
     if(!ayah) { this.elements.clozeContainer.textContent = 'آية غير موجودة'; return; }
     this.currentAyah = ayah;
     this.words = tokenizeArabic(ayah.text);
-    // default revealed words from control
     const init = Number(this.elements.initialWords? this.elements.initialWords.value : 0) || 0;
     this.active.revealed = Math.min(this.words.length, Math.max(0, init));
+    this.elements.wrongModal.classList.add('hidden');
+    this.setFeedback('neutral', 'جاهز — ابدأ الإجابة');
     this.spawnCloze();
-    this.renderHeatmap();
+    this.renderSurahStats();
     this.renderSchedules();
     this.startTime = nowSeconds();
   },
@@ -181,10 +191,9 @@ const UI = {
     }
   },
 
-  // normalization: remove tashkeel when lenient, remove tatweel and collapse spaces and punctuation
   normalizeForCompare(s){
     let out = s||'';
-    out = out.replace(/\u0640/g,''); // tatweel
+    out = out.replace(/\u0640/g,'');
     out = out.replace(/[.,؛:؛!?،\"'()\[\]{}«»…]/g,'');
     out = out.replace(/\s+/g,' ').trim();
     if(this.elements.tashkeelToggle && this.elements.tashkeelToggle.value === 'lenient') out = stripDiacritics(out);
@@ -200,22 +209,18 @@ const UI = {
     const normTarget = this.normalizeForCompare(target);
     const d = levenshtein(normTyped, normTarget);
     const ratio = Math.min(1, d / Math.max(1, normTarget.length));
-    // live feedback classes
     e.target.classList.remove('minor-typo','major-miss');
     if(d === 0){ e.target.classList.remove('minor-typo','major-miss'); }
     else if(d <= 2) e.target.classList.add('minor-typo');
     else e.target.classList.add('major-miss');
-    // immediate acceptance when within tolerance or exact match
     const normLen = Math.max(1, normTarget.length);
     const immediateRatio = Math.min(1, d / normLen);
     const tol = this.getToleranceRatio();
     clearTimeout(this._debounce);
     if(d === 0 || immediateRatio <= tol){
-      // immediate evaluation
       this._debounce = null;
       this.evaluateCurrent(idx, true);
     } else {
-      // debounce auto-evaluate after 1200ms
       this._debounce = setTimeout(()=> this.evaluateCurrent(idx, false), 1200);
     }
   },
@@ -232,25 +237,27 @@ const UI = {
     const tol = this.getToleranceRatio();
     const ratio = Math.min(1, d / Math.max(1, normTarget.length));
     if(d === 0 || ratio <= tol){
-      // correct
-      this.elements.liveFeedback.textContent = 'صحيح ✓';
+      this.setFeedback('success', 'صحيح ✓');
       const span = document.createElement('span'); span.className='quran-text word-ok'; span.textContent = target + ' ';
       input.replaceWith(span);
       this.active.revealed += 1;
-      // SM-2 reward based on similarity
       const errorRate = ratio; const quality = Math.max(0, 5 - Math.round(ratio * 5));
       await this.recordProgress(quality, responseTime, errorRate);
       if(this.active.revealed >= this.words.length){ await this.onAyahComplete(); }
       else { this.spawnCloze(); }
     } else if(force){
-      // wrong attempt: apply heatmap/penalty
       const isMinor = ratio <= 0.25;
-      input.classList.remove('minor-typo','major-miss'); input.classList.add(isMinor? 'minor-typo':'major-miss');
+      input.classList.remove('minor-typo','major-miss','input-success','input-error','input-warning');
+      input.classList.add(isMinor? 'minor-typo':'major-miss', isMinor? 'input-warning':'input-error');
+      input.disabled = true;  // تعطيل الـ input حتى يضغط تابع
+      clearTimeout(this._debounce);
+      this._debounce = null;
       const quality = Math.max(0, 5 - Math.round(ratio * 5)); const errorRate = ratio;
       await this.recordProgress(quality, responseTime, errorRate);
-      this.elements.liveFeedback.textContent = isMinor? 'طباعة بها أخطاء بسيطة — سجلّنا محاولة' : 'خطأ كبير — سجلّنا عقوبة للمراجعة';
-      // keep focus for retry
-      input.focus();
+      // show wrong modal with correct answer
+      this.elements.correctAnswerEl.textContent = target;
+      this.elements.wrongModal.classList.remove('hidden');
+      this.setFeedback(isMinor ? 'warning' : 'error', isMinor ? 'قريب لكن يحتاج ضبط — راجع الإجابة الصحيحة' : 'خاطئ — الإجابة الصحيحة معروضة');
     }
   },
 
@@ -259,22 +266,18 @@ const UI = {
     let prog = await getProgress(this.db, id);
     if(!prog){ prog = {id, surahIndex:this.currentAyah.surahIndex, ayaIndex:this.currentAyah.ayaIndex, attempts:0, errors:0, sm2: new SM2Item(id)}; }
     prog.attempts = (prog.attempts||0) + 1; prog.errors = (prog.errors||0) + (errorRate>0?1:0);
-    // revive sm2 if plain
     if(!(prog.sm2 && prog.sm2 instanceof SM2Item)){
       const s = prog.sm2 || {}; const sm = new SM2Item(id); Object.assign(sm, s); prog.sm2 = sm;
     }
     prog.sm2.applyReview(quality, responseTime, errorRate);
-    // store serializable
     const toSave = { ...prog, sm2: {id: prog.sm2.id, ef: prog.sm2.ef, interval: prog.sm2.interval, reps: prog.sm2.reps, next: prog.sm2.next, history: prog.sm2.history } };
     await putProgress(this.db, toSave);
-    this.renderHeatmap(); this.renderSchedules();
+    this.renderSurahStats(); this.renderSchedules();
   },
 
   async onAyahComplete(){
-    this.elements.liveFeedback.textContent = 'تم إتمام الآية بنجاح — انتقل آليًا';
-    // choose a random surah and aya to continue the game
+    this.setFeedback('success', 'تم إتمام الآية بنجاح — الانتقال...');
     if(this.surahList.length === 0) return;
-    // pick random surah different from current if possible
     const curSurahIdx = this.surahList.findIndex(s=>s.surahIndex===this.active.surahIndex);
     let randSurahIdx = Math.floor(Math.random() * this.surahList.length);
     if(this.surahList.length > 1 && randSurahIdx === curSurahIdx) randSurahIdx = (randSurahIdx + 1) % this.surahList.length;
@@ -288,47 +291,86 @@ const UI = {
 
   updateTimer(){ if(!this.startTime) return this.elements.timer.textContent='0s'; this.elements.timer.textContent = (nowSeconds()-this.startTime) + 's'; },
 
-  async renderHeatmap(){
-    // D3 geometric heatmap: circles grid colored by error rate
-    const surahIndex = this.active.surahIndex; const heatEl = this.elements.heatmapEl; heatEl.innerHTML = '';
-    const meta = this.surahList.find(s=>s.surahIndex===surahIndex); const count = meta?meta.count:0;
-    const progressList = await getProgressBySurah(this.db, surahIndex);
-    const map = {}; for(const p of progressList) map[p.ayaIndex]=p;
+  async renderSurahStats(){
+    const summaryEl = this.elements.surahStatsSummaryEl;
+    const listEl = this.elements.surahStatsListEl;
+    if(!summaryEl || !listEl) return;
 
-    const svg = d3.select(heatEl).append('svg').attr('class','heat-svg').attr('width','100%').attr('height',260);
-    const width = heatEl.clientWidth || 320; const height = 260;
-    const cols = Math.max(6, Math.min(12, Math.floor(width / 40)));
-    const cellSize = Math.min(36, Math.floor(width / cols) - 6);
-    const rows = Math.ceil(count / cols);
-    const data = [];
-    for(let i=1;i<=count;i++){
-      const p = map[i] || {attempts:0, errors:0}; const rate = p.attempts? p.errors / Math.max(1,p.attempts) : 0;
-      const col = (i-1) % cols; const row = Math.floor((i-1)/cols);
-      data.push({i, rate, attempts: p.attempts||0, errors: p.errors||0, x: col * (cellSize+6) + cellSize/2 + 6, y: row * (cellSize+8) + cellSize/2 + 6});
+    const allProgress = await new Promise((res,rej)=>{
+      const req = this.db.transaction('progress').objectStore('progress').getAll();
+      req.onsuccess = ()=> res(req.result || []);
+      req.onerror = ()=> rej(req.error);
+    });
+
+    const bySurah = new Map();
+    for(const s of this.surahList) bySurah.set(s.surahIndex, {surahIndex:s.surahIndex, surahName:s.surahName, count:s.count, attempts:0, errors:0});
+
+    for(const item of allProgress){
+      const current = bySurah.get(item.surahIndex) || {surahIndex:item.surahIndex, surahName:`سورة ${item.surahIndex}`, count:0, attempts:0, errors:0};
+      current.attempts += Number(item.attempts || 0);
+      current.errors += Number(item.errors || 0);
+      bySurah.set(item.surahIndex, current);
     }
 
-    const color = d3.scaleLinear().domain([0,1]).range(['#3ddc84','#ff3b30']);
+    const rows = [...bySurah.values()]
+      .filter(row => row.attempts > 0 || row.errors > 0)
+      .map(row => ({
+        ...row,
+        errorRate: row.attempts ? row.errors / Math.max(1, row.attempts) : 0
+      }))
+      .sort((a,b)=> (b.errors - a.errors) || (b.errorRate - a.errorRate) || (b.attempts - a.attempts));
 
-    // tooltip
-    let tooltip = heatEl.querySelector('.tooltip');
-    if(!tooltip){ tooltip = document.createElement('div'); tooltip.className='tooltip'; heatEl.appendChild(tooltip); }
+    const totalAttempts = rows.reduce((sum, row)=> sum + row.attempts, 0);
+    const totalErrors = rows.reduce((sum, row)=> sum + row.errors, 0);
+    const mostProblem = rows[0] || null;
 
-    const g = svg.append('g').attr('transform','translate(6,6)');
-    const nodes = g.selectAll('g').data(data).enter().append('g').attr('transform', d => `translate(${d.x},${d.y})`).style('cursor','pointer');
+    summaryEl.innerHTML = mostProblem
+      ? `<div class="stat-card"><div class="text-[11px] text-gray-500 mb-1">ملخص سريع</div><div class="text-sm text-gray-100 leading-6">إجمالي المحاولات: <strong>${totalAttempts}</strong><br>إجمالي الأخطاء: <strong>${totalErrors}</strong><br>الأكثر خطأ: <strong>${mostProblem.surahName}</strong> (${(mostProblem.errorRate * 100).toFixed(0)}%)</div></div>`
+      : 'لا توجد بيانات كافية بعد. ابدأ بالمراجعة وستظهر لك السور التي يكثر فيها الخطأ.';
 
-    nodes.append('circle').attr('r', cellSize/2).attr('fill', d => color(d.rate)).attr('stroke','rgba(255,255,255,0.03)').attr('stroke-width',1)
-      .on('mouseover', function(event,d){ tooltip.style.opacity = 1; tooltip.style.left = (event.offsetX+12)+'px'; tooltip.style.top = (event.offsetY+6)+'px'; tooltip.textContent = `آية ${d.i} — خطأ: ${(d.rate*100).toFixed(0)}% • محاولات:${d.attempts}`; })
-      .on('mouseout', ()=>{ tooltip.style.opacity = 0; })
-      .on('click', (event,d)=>{ this.active.ayaIndex = d.i; this.active.revealed = 0; this.renderActive(); });
+    listEl.innerHTML = '';
+    if(!rows.length){
+      const empty = document.createElement('div');
+      empty.className = 'text-xs text-gray-500 bg-white/5 rounded-xl p-3 border border-white/10';
+      empty.textContent = 'لن تظهر الإحصاءات إلا بعد أن تبدأ بكتابة الإجابات وتسجيل المحاولات.';
+      listEl.appendChild(empty);
+      return;
+    }
 
-    nodes.append('text').text(d=>d.i).attr('y',4).attr('text-anchor','middle').attr('fill','rgba(255,255,255,0.85)').attr('font-size',12);
+    const topRows = rows.slice(0, 7);
+    const maxErrors = Math.max(1, ...topRows.map(row => row.errors));
+
+    for(const row of topRows){
+      const percent = row.attempts ? Math.round((row.errors / Math.max(1, row.attempts)) * 100) : 0;
+      const barWidth = Math.max(8, Math.round((row.errors / maxErrors) * 100));
+      const item = document.createElement('div');
+      item.className = 'stat-card';
+      item.innerHTML = `
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <div class="text-sm text-gray-200 font-semibold">${row.surahName}</div>
+            <div class="text-[11px] text-gray-500">${row.errors} أخطاء من ${row.attempts} محاولة</div>
+          </div>
+          <div class="text-xs text-red-300 px-2 py-1 rounded-full bg-red-500/10 border border-red-500/20">${percent}%</div>
+        </div>
+        <div class="stat-bar">
+          <span style="width:${barWidth}%"></span>
+        </div>
+      `;
+      listEl.appendChild(item);
+    }
   },
 
   async renderSchedules(){
     const list = await new Promise((res,rej)=>{ const req = this.db.transaction('progress').objectStore('progress').getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); });
-    const lines = list.map(p=> `${p.id} → next:${p.sm2? new Date(p.sm2.next*1000).toLocaleString() : '—'} • ef:${p.sm2? (p.sm2.ef||'') : ''} • attempts:${p.attempts||0}`);
-    this.elements.schedulesEl.textContent = lines.join('\n') || 'لا مواعيد';
-    this.elements.progressEl.textContent = list.length? `${list.length} آيات تُراجع` : 'لا تقدم';
+    this.elements.schedulesEl.innerHTML = '';
+    list.forEach(p=>{
+      const div = document.createElement('div');
+      div.className = 'text-xs p-2 rounded bg-white/5 border border-white/10 mb-1';
+      div.textContent = formatSchedule(p.id, p.sm2, p.attempts);
+      this.elements.schedulesEl.appendChild(div);
+    });
+    this.elements.progressEl.textContent = list.length? `${list.length} آيات تُراجع` : 'لا تقدم مسجل';
   }
 };
 
