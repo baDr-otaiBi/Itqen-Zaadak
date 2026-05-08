@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Itqin Zaadak — إتقن زادك</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Alyamama&family=Amiri:ital@0;1&display=swap" rel="stylesheet">
+  <!-- Tailwind Play CDN for utility classes (minimal, for demo) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-100 font-alyamama">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl tracking-tight">إتقن زادك — Itqin Zaadak</h1>
+      <nav class="text-sm text-gray-400">Ruthless Minimal • Dark • Data-driven</nav>
+    </header>
+
+    <main class="grid grid-cols-12 gap-6">
+      <!-- Left: Surah list & heatmap -->
+      <section class="col-span-3 space-y-4">
+        <div class="p-3 bg-gray-800 rounded">
+          <div class="text-xs text-gray-400 mb-2">المصادر</div>
+          <ul id="surah-list" class="space-y-2 text-sm"></ul>
+        </div>
+
+        <div class="p-3 bg-gray-800 rounded">
+          <div class="text-xs text-gray-400 mb-2">خريطة الضعف (Heatmap)</div>
+          <div id="heatmap" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- Center: Ayah + input -->
+      <section class="col-span-6 p-5 bg-gray-850 rounded">
+        <div class="mb-4">
+          <div class="text-xs text-gray-400">السورة / الآية</div>
+          <div id="surah-title" class="text-lg font-semibold"></div>
+        </div>
+
+        <div class="quran-window p-4 bg-black/50 rounded mb-4">
+          <div id="ayah-display" class="quran-text text-right text-2xl leading-tight" ></div>
+        </div>
+
+        <div class="p-3 bg-gray-900 rounded">
+          <label class="block text-xs text-gray-400 mb-2">اكتب الآية هنا — التحقق آنيًا</label>
+          <div class="relative">
+            <textarea id="typing-area" rows="3" placeholder="ابدأ بالكتابة..." class="w-full resize-none bg-transparent outline-none text-lg p-2" ></textarea>
+            <div id="inline-feedback" class="absolute inset-0 pointer-events-none p-2"></div>
+          </div>
+          <div id="status-row" class="mt-2 flex items-center justify-between text-xs text-gray-400">
+            <div id="live-feedback">انتظار الإدخال...</div>
+            <div id="timer">0s</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Progress & scheduling -->
+      <aside class="col-span-3 p-5 bg-gray-800 rounded space-y-4">
+        <div>
+          <div class="text-xs text-gray-400">التقدم</div>
+          <div id="progress" class="mt-2 text-sm">لا بيانات بعد</div>
+        </div>
+
+        <div>
+          <div class="text-xs text-gray-400">الجدولة القادمة (SM-2)</div>
+          <div id="schedules" class="mt-2 text-sm"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
